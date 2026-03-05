@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIGIDEA — AI Productivity Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07080c;
+    --surface: #0e1017;
+    --surface2: #13151e;
+    --border: rgba(255,255,255,0.07);
+    --border-bright: rgba(255,255,255,0.14);
+    --accent: #c8ff00;
+    --accent2: #ff6b35;
+    --accent3: #6366f1;
+    --accent4: #22d3ee;
+    --text: #e8eaf0;
+    --text-muted: #5a5f72;
+    --text-dim: #8b91a8;
+    --red: #ff4466;
+    --green: #00e5a0;
+    --yellow: #ffd166;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none; z-index: 1000; opacity: 0.4;
+  }
+
+  .orb { position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0; }
+  .orb-1 { width: 600px; height: 600px; background: rgba(99,102,241,0.08); top: -200px; right: -100px; }
+  .orb-2 { width: 400px; height: 400px; background: rgba(200,255,0,0.05); bottom: 100px; left: -100px; }
+  .orb-3 { width: 300px; height: 300px; background: rgba(255,107,53,0.06); top: 50%; left: 50%; }
+
+  .app { position: relative; z-index: 1; }
+
+  /* ── SETUP BANNER ── */
+  #setup-banner {
+    background: linear-gradient(90deg, rgba(99,102,241,0.2), rgba(200,255,0,0.1));
+    border-bottom: 1px solid rgba(200,255,0,0.25);
+    padding: 14px 40px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  #setup-banner.hidden { display: none; }
+  .setup-label { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--accent); letter-spacing: 1px; flex-shrink: 0; }
+  .setup-inputs { display: flex; gap: 10px; flex: 1; flex-wrap: wrap; }
+  .setup-input {
+    flex: 1; min-width: 200px;
+    background: rgba(0,0,0,0.4); border: 1px solid var(--border-bright);
+    border-radius: 8px; padding: 8px 14px; color: var(--text);
+    font-family: 'Space Mono', monospace; font-size: 11px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .setup-input:focus { border-color: var(--accent); }
+  .setup-input::placeholder { color: var(--text-muted); }
+  .btn-setup {
+    padding: 8px 18px; background: var(--accent); color: #000;
+    border: none; border-radius: 8px; font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 12px; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+  }
+  .btn-setup:hover { background: #d4ff1a; }
+  .setup-hint { font-size: 11px; color: var(--text-muted); width: 100%; font-family: 'Space Mono', monospace; }
+  .setup-hint a { color: var(--accent3); text-decoration: none; }
+  .setup-hint a:hover { text-decoration: underline; }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 28px; right: 28px;
+    padding: 12px 20px; border-radius: 10px;
+    font-family: 'Space Mono', monospace; font-size: 12px;
+    z-index: 9999; opacity: 0; pointer-events: none;
+    transition: all 0.3s; transform: translateY(8px);
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  }
+  #toast.show { opacity: 1; transform: translateY(0); pointer-events: all; }
+  #toast.success { background: rgba(0,229,160,0.15); border: 1px solid rgba(0,229,160,0.4); color: var(--green); }
+  #toast.error   { background: rgba(255,68,102,0.15); border: 1px solid rgba(255,68,102,0.4); color: var(--red); }
+  #toast.info    { background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.4); color: var(--accent3); }
+
+  /* ── SYNC INDICATOR ── */
+  .sync-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 6px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+    transition: background 0.3s;
+  }
+  .sync-dot.syncing { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); animation: spin-pulse 0.8s linear infinite; }
+  .sync-dot.error   { background: var(--red);    box-shadow: 0 0 6px var(--red);    animation: none; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+  @keyframes spin-pulse { 0%{transform:scale(1)} 50%{transform:scale(1.5)} 100%{transform:scale(1)} }
+
+  /* ── HEADER ── */
+  header {
+    padding: 22px 40px; display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: rgba(7,8,12,0.8); backdrop-filter: blur(20px);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 14px; }
+  .logo-mark {
+    width: 38px; height: 38px; background: var(--accent); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Mono', monospace; font-weight: 700; font-size: 14px;
+    color: #000; letter-spacing: -1px; transform: rotate(-3deg);
+  }
+  .logo-text { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -0.5px; }
+  .logo-text span { color: var(--accent); }
+  .logo-sub { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--text-muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+  .header-actions { display: flex; gap: 12px; align-items: center; }
+  .stat-pill {
+    padding: 6px 14px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; font-family: 'Space Mono', monospace; font-size: 11px;
+    color: var(--text-dim); display: flex; align-items: center; gap: 8px;
+  }
+  .btn-primary {
+    padding: 9px 20px; background: var(--accent); color: #000; border: none;
+    border-radius: 8px; font-family: 'Syne', sans-serif; font-weight: 700;
+    font-size: 13px; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-primary:hover { background: #d4ff1a; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(200,255,0,0.25); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    padding: 24px 40px; display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 1px; background: var(--border); border-bottom: 1px solid var(--border);
+  }
+  .stat-card { background: var(--bg); padding: 20px 28px; position: relative; overflow: hidden; }
+  .stat-card::after { content:''; position:absolute; bottom:0; left:28px; height:2px; width:30px; background:var(--accent); border-radius:2px; }
+  .stat-card.orange::after { background: var(--accent2); }
+  .stat-card.purple::after { background: var(--accent3); }
+  .stat-card.cyan::after { background: var(--accent4); }
+  .stat-num { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 32px; letter-spacing: -2px; line-height: 1; }
+  .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 6px; text-transform: uppercase; letter-spacing: 1px; font-family: 'Space Mono', monospace; }
+
+  /* ── MAIN LAYOUT ── */
+  .main { display: grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 130px); }
+
+  .sidebar { border-right: 1px solid var(--border); padding: 28px 0; position: sticky; top: 87px; height: calc(100vh - 87px); overflow-y: auto; }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+
+  .sidebar-section { padding: 0 20px; margin-bottom: 28px; }
+  .sidebar-label { font-family: 'Space Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); padding: 0 8px; margin-bottom: 8px; }
+
+  .filter-btn {
+    width: 100%; padding: 9px 12px; background: none; border: none; border-radius: 8px;
+    color: var(--text-dim); font-family: 'DM Sans', sans-serif; font-size: 13px;
+    text-align: left; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: all 0.15s;
+  }
+  .filter-btn:hover { background: var(--surface2); color: var(--text); }
+  .filter-btn.active { background: rgba(200,255,0,0.08); color: var(--accent); }
+  .filter-btn .count { margin-left: auto; font-family: 'Space Mono', monospace; font-size: 10px; background: var(--surface2); padding: 2px 7px; border-radius: 10px; color: var(--text-muted); }
+  .filter-btn.active .count { background: rgba(200,255,0,0.15); color: var(--accent); }
+  .filter-icon { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+
+  .content { padding: 32px 40px; }
+  .content-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+  .view-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: -0.5px; }
+  .view-controls { display: flex; gap: 8px; align-items: center; }
+
+  .search-box { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; width: 220px; transition: border-color 0.2s; }
+  .search-box:focus-within { border-color: var(--border-bright); }
+  .search-box input { background: none; border: none; outline: none; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; width: 100%; }
+  .search-box input::placeholder { color: var(--text-muted); }
+
+  .view-toggle { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .view-toggle button { padding: 8px 12px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; transition: all 0.15s; }
+  .view-toggle button.active { background: var(--surface2); color: var(--text); }
+
+  /* ── CARDS ── */
+  .ideas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .ideas-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .idea-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px;
+    cursor: pointer; transition: all 0.25s; position: relative; overflow: hidden;
+    animation: fadeUp 0.4s ease both;
+  }
+  .idea-card:hover { border-color: var(--border-bright); transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+  .idea-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; border-radius:14px 14px 0 0; }
+  .idea-card.impact-high::before { background: var(--accent); }
+  .idea-card.impact-medium::before { background: var(--accent2); }
+  .idea-card.impact-low::before { background: var(--accent3); }
+
+  @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+  .card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+  .card-category { display: flex; align-items: center; gap: 7px; font-size: 11px; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+  .category-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+  .status-badge { padding: 4px 10px; border-radius: 6px; font-size: 10px; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 1px; flex-shrink: 0; }
+  .status-badge.backlog   { background: rgba(90,95,114,0.2);   color: var(--text-muted); border: 1px solid rgba(90,95,114,0.3); }
+  .status-badge.exploring { background: rgba(99,102,241,0.15); color: var(--accent3);    border: 1px solid rgba(99,102,241,0.3); }
+  .status-badge.building  { background: rgba(200,255,0,0.1);   color: var(--accent);     border: 1px solid rgba(200,255,0,0.2); }
+  .status-badge.testing   { background: rgba(255,209,102,0.12);color: var(--yellow);     border: 1px solid rgba(255,209,102,0.25); }
+  .status-badge.live      { background: rgba(0,229,160,0.12);  color: var(--green);      border: 1px solid rgba(0,229,160,0.25); }
+  .status-badge.paused    { background: rgba(255,68,102,0.1);  color: var(--red);        border: 1px solid rgba(255,68,102,0.2); }
+
+  .card-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: -0.3px; line-height: 1.35; margin-bottom: 10px; }
+  .card-desc { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin-bottom: 16px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .tag { padding: 3px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; font-size: 11px; color: var(--text-dim); font-family: 'Space Mono', monospace; }
+
+  .card-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--border); }
+  .assignees { display: flex; align-items: center; }
+  .avatar { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--surface); margin-left: -8px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; font-family: 'Syne', sans-serif; flex-shrink: 0; }
+  .avatar:first-child { margin-left: 0; }
+
+  .impact-chip { display: flex; align-items: center; gap: 5px; font-size: 11px; font-family: 'Space Mono', monospace; color: var(--text-muted); }
+  .impact-chip .bar { display: flex; gap: 2px; }
+  .impact-chip .bar span { width: 3px; height: 10px; border-radius: 2px; background: var(--border); }
+  .impact-chip .bar span.filled { background: var(--accent); }
+  .impact-chip .bar span.filled.orange { background: var(--accent2); }
+  .impact-chip .bar span.filled.purple { background: var(--accent3); }
+
+  .progress-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .progress-track { flex: 1; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.5s ease; }
+  .progress-pct { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--text-muted); min-width: 28px; text-align: right; }
+
+  /* ── LIST VIEW ── */
+  .list-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; display: grid; grid-template-columns: 28px 1fr auto auto auto; align-items: center; gap: 16px; cursor: pointer; transition: all 0.2s; animation: fadeUp 0.3s ease both; }
+  .list-card:hover { border-color: var(--border-bright); background: var(--surface2); }
+  .list-num { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text-muted); text-align: center; }
+  .list-info .list-title { font-family: 'Syne', sans-serif; font-weight: 600; font-size: 14px; margin-bottom: 3px; }
+  .list-info .list-tags { display: flex; gap: 5px; }
+  .list-info .list-tags .tag { font-size: 10px; padding: 2px 7px; }
+
+  /* ── EMPTY STATE ── */
+  .empty-state { text-align: center; padding: 80px 40px; color: var(--text-muted); }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+  .empty-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 18px; color: var(--text-dim); margin-bottom: 8px; }
+  .empty-text { font-size: 13px; line-height: 1.6; }
+
+  /* ── LOADING STATE ── */
+  .loading-state { text-align: center; padding: 80px 40px; }
+  .spinner { width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── ADD MODAL ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(7,8,12,0.85); backdrop-filter: blur(8px); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: var(--surface); border: 1px solid var(--border-bright); border-radius: 18px; width: 100%; max-width: 620px; max-height: 90vh; overflow-y: auto; transform: translateY(20px) scale(0.97); transition: transform 0.25s ease; box-shadow: 0 40px 80px rgba(0,0,0,0.6); }
+  .modal-overlay.open .modal { transform: translateY(0) scale(1); }
+  .modal::-webkit-scrollbar { width: 4px; }
+  .modal::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .modal-header { padding: 26px 28px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .modal-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -0.5px; }
+  .modal-close { width: 32px; height: 32px; border-radius: 8px; background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; transition: all 0.15s; }
+  .modal-close:hover { color: var(--text); border-color: var(--border-bright); }
+  .modal-body { padding: 24px 28px; }
+  .form-group { margin-bottom: 18px; }
+  .form-label { display: block; font-size: 11px; font-family: 'Space Mono', monospace; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 8px; }
+  .form-input, .form-textarea, .form-select { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none; transition: border-color 0.2s; appearance: none; }
+  .form-input:focus, .form-textarea:focus, .form-select:focus { border-color: rgba(200,255,0,0.4); box-shadow: 0 0 0 3px rgba(200,255,0,0.06); }
+  .form-textarea { resize: vertical; min-height: 90px; line-height: 1.6; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .modal-footer { padding: 16px 28px 24px; display: flex; gap: 10px; justify-content: flex-end; }
+  .btn-ghost { padding: 9px 18px; background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text-dim); font-family: 'DM Sans', sans-serif; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+  .btn-ghost:hover { border-color: var(--border-bright); color: var(--text); }
+
+  /* ── DETAIL PANEL ── */
+  .detail-overlay { position: fixed; inset: 0; z-index: 400; pointer-events: none; }
+  .detail-overlay.open { pointer-events: all; }
+  .detail-backdrop { position: absolute; inset: 0; background: rgba(7,8,12,0.5); opacity: 0; transition: opacity 0.25s; }
+  .detail-overlay.open .detail-backdrop { opacity: 1; }
+  .detail-panel { position: absolute; top: 0; right: 0; width: 500px; height: 100%; background: var(--surface); border-left: 1px solid var(--border-bright); overflow-y: auto; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); box-shadow: -20px 0 60px rgba(0,0,0,0.5); }
+  .detail-panel::-webkit-scrollbar { width: 4px; }
+  .detail-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .detail-overlay.open .detail-panel { transform: translateX(0); }
+  .detail-header { padding: 28px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 10; }
+  .detail-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .detail-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px; letter-spacing: -0.5px; line-height: 1.3; }
+  .detail-body { padding: 24px 28px; }
+  .detail-section { margin-bottom: 28px; }
+  .detail-section-title { font-family: 'Space Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); margin-bottom: 12px; }
+  .detail-desc { font-size: 14px; color: var(--text-dim); line-height: 1.7; }
+  .milestone-list { display: flex; flex-direction: column; gap: 10px; }
+  .milestone-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; }
+  .milestone-check { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-bright); display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; transition: all 0.2s; }
+  .milestone-check.done { background: var(--green); border-color: var(--green); color: #000; font-size: 10px; }
+  .milestone-text { font-size: 13px; flex: 1; }
+  .milestone-text.done { text-decoration: line-through; color: var(--text-muted); }
+  .note-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .note-box textarea { width: 100%; background: none; border: none; outline: none; color: var(--text-dim); font-family: 'DM Sans', sans-serif; font-size: 13px; line-height: 1.6; resize: none; min-height: 80px; }
+  .team-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .team-chip { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; font-size: 12px; color: var(--text-dim); }
+  .status-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .status-option { padding: 7px 14px; border-radius: 8px; font-size: 12px; font-family: 'Space Mono', monospace; cursor: pointer; border: 1px solid var(--border); background: var(--surface2); color: var(--text-muted); transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.5px; }
+  .status-option:hover { border-color: var(--border-bright); color: var(--text); }
+  .status-option.active-backlog   { background: rgba(90,95,114,0.2);   color: #8b91a8;        border-color: rgba(90,95,114,0.4); }
+  .status-option.active-exploring { background: rgba(99,102,241,0.15); color: var(--accent3); border-color: rgba(99,102,241,0.4); }
+  .status-option.active-building  { background: rgba(200,255,0,0.1);   color: var(--accent);  border-color: rgba(200,255,0,0.3); }
+  .status-option.active-testing   { background: rgba(255,209,102,0.12);color: var(--yellow);  border-color: rgba(255,209,102,0.3); }
+  .status-option.active-live      { background: rgba(0,229,160,0.12);  color: var(--green);   border-color: rgba(0,229,160,0.3); }
+  .status-option.active-paused    { background: rgba(255,68,102,0.1);  color: var(--red);     border-color: rgba(255,68,102,0.3); }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .stats-bar { grid-template-columns: repeat(3, 1fr); }
+    header { padding: 16px 20px; }
+    .content { padding: 20px; }
+    .detail-panel { width: 100%; }
+    .ideas-grid { grid-template-columns: 1fr; }
+    #setup-banner { padding: 12px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+
+<!-- ══ SETUP BANNER ══ -->
+<div id="setup-banner">
+  <div class="setup-label">⚡ CONNECT SUPABASE</div>
+  <div class="setup-inputs">
+    <input class="setup-input" id="sb-url"    placeholder="Project URL  →  https://xxxx.supabase.co" />
+    <input class="setup-input" id="sb-key"    placeholder="Anon public key  →  eyJhbGci..." />
+  </div>
+  <button class="btn-setup" onclick="connectSupabase()">Connect →</button>
+  <div class="setup-hint">
+    Get these from <a href="https://supabase.com/dashboard" target="_blank">supabase.com/dashboard</a>
+    → Your Project → Settings → API.
+    Then run the SQL below in the <a href="#" onclick="showSqlModal()">SQL Editor ↗</a> to create the table (one time only).
+  </div>
+</div>
+
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="logo-mark">BI</div>
+      <div>
+        <div class="logo-text">BIG<span>IDEA</span></div>
+        <div class="logo-sub">AI Productivity Tracker</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="stat-pill">
+        <span class="sync-dot" id="sync-dot"></span>
+        <span id="sync-status">not connected</span>
+      </div>
+      <div class="stat-pill">
+        <span id="header-live-count">0</span> live
+      </div>
+      <button class="btn-primary" onclick="openModal()">+ New Idea</button>
+    </div>
+  </header>
+
+  <div class="stats-bar">
+    <div class="stat-card">
+      <div class="stat-num" id="stat-total">—</div>
+      <div class="stat-label">Total Ideas</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="stat-num" id="stat-building">—</div>
+      <div class="stat-label">Building</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-live">—</div>
+      <div class="stat-label">Live</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="stat-num" id="stat-exploring">—</div>
+      <div class="stat-label">Exploring</div>
+    </div>
+    <div class="stat-card cyan">
+      <div class="stat-num" id="stat-impact">—</div>
+      <div class="stat-label">High Impact</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Filter by Status</div>
+        <button class="filter-btn active" onclick="setFilter('all', this)"><div class="filter-icon">🧠</div>All Ideas<span class="count" id="count-all">0</span></button>
+        <button class="filter-btn" onclick="setFilter('backlog', this)"><div class="filter-icon">📦</div>Backlog<span class="count" id="count-backlog">0</span></button>
+        <button class="filter-btn" onclick="setFilter('exploring', this)"><div class="filter-icon">🔍</div>Exploring<span class="count" id="count-exploring">0</span></button>
+        <button class="filter-btn" onclick="setFilter('building', this)"><div class="filter-icon">⚙️</div>Building<span class="count" id="count-building">0</span></button>
+        <button class="filter-btn" onclick="setFilter('testing', this)"><div class="filter-icon">🧪</div>Testing<span class="count" id="count-testing">0</span></button>
+        <button class="filter-btn" onclick="setFilter('live', this)"><div class="filter-icon">🚀</div>Live<span class="count" id="count-live">0</span></button>
+        <button class="filter-btn" onclick="setFilter('paused', this)"><div class="filter-icon">⏸️</div>Paused<span class="count" id="count-paused">0</span></button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Filter by Impact</div>
+        <button class="filter-btn" onclick="setImpactFilter('high', this)"><div class="filter-icon">🔥</div>High Impact<span class="count" id="count-high">0</span></button>
+        <button class="filter-btn" onclick="setImpactFilter('medium', this)"><div class="filter-icon">⚡</div>Medium Impact<span class="count" id="count-medium">0</span></button>
+        <button class="filter-btn" onclick="setImpactFilter('low', this)"><div class="filter-icon">💡</div>Low Impact<span class="count" id="count-low">0</span></button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Categories</div>
+        <div id="category-filters"></div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-header">
+        <div class="view-title" id="view-title">All Ideas</div>
+        <div class="view-controls">
+          <div class="search-box">
+            <span style="color:var(--text-muted);font-size:14px">⌕</span>
+            <input type="text" placeholder="Search ideas..." id="search-input" oninput="renderIdeas()">
+          </div>
+          <div class="view-toggle">
+            <button class="active" onclick="setView('grid', this)" title="Grid">⊞</button>
+            <button onclick="setView('list', this)" title="List">≡</button>
+          </div>
+        </div>
+      </div>
+      <div id="ideas-container">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <div style="color:var(--text-muted);font-family:'Space Mono',monospace;font-size:12px">Connect Supabase above to load ideas</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">New Big Idea</div>
+        <div style="color:var(--text-muted);font-size:12px;margin-top:4px;font-family:'Space Mono',monospace">Capture your AI productivity insight</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Idea Title</label>
+        <input type="text" class="form-input" id="f-title" placeholder="e.g. n8n + JIRA + Google Chat Integration">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-textarea" id="f-desc" placeholder="Describe the idea, what problem it solves, and how it improves productivity..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-select" id="f-category">
+            <option value="Automation">🤖 Automation</option>
+            <option value="Integration">🔗 Integration</option>
+            <option value="Analytics">📊 Analytics</option>
+            <option value="Communication">💬 Communication</option>
+            <option value="Workflow">⚙️ Workflow</option>
+            <option value="AI Agent">🧠 AI Agent</option>
+            <option value="Data Pipeline">🔄 Data Pipeline</option>
+            <option value="Developer Tools">🛠️ Developer Tools</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="f-status">
+            <option value="backlog">Backlog</option>
+            <option value="exploring">Exploring</option>
+            <option value="building">Building</option>
+            <option value="testing">Testing</option>
+            <option value="live">Live</option>
+            <option value="paused">Paused</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Impact Level</label>
+          <select class="form-select" id="f-impact">
+            <option value="high">🔥 High</option>
+            <option value="medium">⚡ Medium</option>
+            <option value="low">💡 Low</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Effort Level</label>
+          <select class="form-select" id="f-effort">
+            <option value="high">🏋️ High</option>
+            <option value="medium">🚶 Medium</option>
+            <option value="low">🏃 Low</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tags (comma separated)</label>
+        <input type="text" class="form-input" id="f-tags" placeholder="n8n, jira, automation, api">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assigned Team Members</label>
+        <input type="text" class="form-input" id="f-assignees" placeholder="e.g. AK, JS, MR (initials)">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Milestones (one per line)</label>
+        <textarea class="form-textarea" id="f-milestones" placeholder="Research existing tools&#10;Set up n8n environment&#10;Build JIRA webhook&#10;Test in staging&#10;Deploy to production" style="min-height:100px"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" id="btn-add-idea" onclick="addIdea()">Add Idea →</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL PANEL -->
+<div class="detail-overlay" id="detail-overlay">
+  <div class="detail-backdrop" onclick="closeDetail()"></div>
+  <div class="detail-panel">
+    <div class="detail-header">
+      <div class="detail-meta">
+        <div id="detail-category" class="card-category"></div>
+        <button class="modal-close" onclick="closeDetail()">✕</button>
+      </div>
+      <div class="detail-title" id="detail-title"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="status-badge" id="detail-status-badge"></span>
+        <span id="detail-impact-chip" class="impact-chip"></span>
+      </div>
+    </div>
+    <div class="detail-body">
+      <div class="detail-section">
+        <div class="detail-section-title">Description</div>
+        <div class="detail-desc" id="detail-desc"></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Progress</div>
+        <div class="progress-row">
+          <div class="progress-track" style="height:6px"><div class="progress-fill" id="detail-progress"></div></div>
+          <div class="progress-pct" id="detail-progress-pct"></div>
+        </div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Update Status</div>
+        <div class="status-row" id="detail-status-row"></div>
+      </div>
+      <div class="detail-section" id="milestones-section">
+        <div class="detail-section-title">Milestones</div>
+        <div class="milestone-list" id="detail-milestones"></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Team</div>
+        <div class="team-row" id="detail-team"></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Tags</div>
+        <div class="card-tags" id="detail-tags"></div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-section-title">Notes</div>
+        <div class="note-box">
+          <textarea id="detail-notes" placeholder="Add implementation notes, blockers, links..." oninput="scheduleNoteSave(this)"></textarea>
+        </div>
+      </div>
+      <div style="padding-top:12px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn-ghost" onclick="deleteIdea(currentDetailId)" style="color:var(--red);border-color:rgba(255,68,102,0.3)">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SQL SETUP MODAL -->
+<div class="modal-overlay" id="sql-modal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">One-time SQL Setup</div>
+        <div style="color:var(--text-muted);font-size:12px;margin-top:4px;font-family:'Space Mono',monospace">Run this once in Supabase → SQL Editor → New Query</div>
+      </div>
+      <button class="modal-close" onclick="closeSqlModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <pre id="sql-block" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:20px;font-family:'Space Mono',monospace;font-size:11px;color:var(--accent4);overflow-x:auto;line-height:1.7;white-space:pre-wrap">-- Run this in Supabase SQL Editor (one time only)
+
+create table if not exists ideas (
+  id          bigserial primary key,
+  title       text not null,
+  description text,
+  category    text,
+  status      text default 'backlog',
+  impact      text default 'medium',
+  effort      text default 'medium',
+  tags        text[],
+  assignees   text[],
+  milestones  jsonb default '[]',
+  progress    integer default 0,
+  notes       text,
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+-- Allow public read/write (for team sharing without login)
+-- If you want login-protected access, set up Supabase Auth instead
+alter table ideas enable row level security;
+
+create policy "Public read"   on ideas for select using (true);
+create policy "Public insert" on ideas for insert with check (true);
+create policy "Public update" on ideas for update using (true);
+create policy "Public delete" on ideas for delete using (true);</pre>
+      <div style="margin-top:16px;display:flex;gap:10px">
+        <button class="btn-primary" onclick="copySql()">Copy SQL</button>
+        <a href="https://supabase.com/dashboard" target="_blank" style="text-decoration:none">
+          <button class="btn-ghost">Open Supabase Dashboard ↗</button>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// CONFIG — filled in when user connects
+// ══════════════════════════════════════════════════════
+let SUPABASE_URL = '';
+let SUPABASE_KEY = '';
+let isConnected  = false;
+
+const COLORS = { backlog:'#5a5f72', exploring:'#6366f1', building:'#c8ff00', testing:'#ffd166', live:'#00e5a0', paused:'#ff4466' };
+const CATEGORY_ICONS = { 'Automation':'🤖','Integration':'🔗','Analytics':'📊','Communication':'💬','Workflow':'⚙️','AI Agent':'🧠','Data Pipeline':'🔄','Developer Tools':'🛠️' };
+const AVATAR_COLORS  = ['#6366f1','#c8ff00','#ff6b35','#22d3ee','#ffd166','#00e5a0','#ff4466','#a78bfa'];
+
+let ideas              = [];
+let currentFilter      = 'all';
+let currentImpact      = null;
+let currentCategoryFilter = null;
+let currentView        = 'grid';
+let currentDetailId    = null;
+let noteSaveTimer      = null;
+
+// ── SUPABASE HELPERS ─────────────────────────────────
+async function sbFetch(path, opts = {}) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...opts,
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': opts.prefer || 'return=representation',
+      ...opts.headers
+    }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || `HTTP ${res.status}`);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+function setSyncState(state) {
+  const dot    = document.getElementById('sync-dot');
+  const status = document.getElementById('sync-status');
+  dot.className = 'sync-dot ' + (state === 'syncing' ? 'syncing' : state === 'error' ? 'error' : '');
+  status.textContent = state === 'syncing' ? 'syncing…' : state === 'error' ? 'error' : 'live';
+}
+
+// ── CONNECT ──────────────────────────────────────────
+async function connectSupabase() {
+  const url = document.getElementById('sb-url').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('sb-key').value.trim();
+  if (!url || !key) { toast('Enter both URL and API key', 'error'); return; }
+
+  SUPABASE_URL = url;
+  SUPABASE_KEY = key;
+  setSyncState('syncing');
+
+  try {
+    await loadIdeas();
+    isConnected = true;
+    document.getElementById('setup-banner').classList.add('hidden');
+    // Save creds to sessionStorage so page refresh works within same tab
+    sessionStorage.setItem('sb_url', url);
+    sessionStorage.setItem('sb_key', key);
+    toast('Connected to Supabase ✓', 'success');
+    setSyncState('live');
+    // Start real-time polling every 15s
+    setInterval(pollForUpdates, 15000);
+  } catch(e) {
+    setSyncState('error');
+    toast('Connection failed: ' + e.message, 'error');
+    SUPABASE_URL = '';
+    SUPABASE_KEY = '';
+  }
+}
+
+// ── REAL-TIME POLLING ────────────────────────────────
+let lastPollHash = '';
+async function pollForUpdates() {
+  if (!isConnected) return;
+  try {
+    const fresh = await sbFetch('ideas?select=id,updated_at&order=updated_at.desc');
+    const hash  = JSON.stringify(fresh.map(r => r.id + r.updated_at));
+    if (hash !== lastPollHash) {
+      lastPollHash = hash;
+      await loadIdeas(false); // silent refresh
+    }
+  } catch(_) {}
+}
+
+// ── LOAD IDEAS ───────────────────────────────────────
+async function loadIdeas(showLoader = true) {
+  if (showLoader) {
+    document.getElementById('ideas-container').innerHTML = `<div class="loading-state"><div class="spinner"></div><div style="color:var(--text-muted);font-family:'Space Mono',monospace;font-size:12px">Loading ideas…</div></div>`;
+  }
+  const rows = await sbFetch('ideas?order=created_at.desc');
+  ideas = rows.map(normalizeRow);
+  const hash = JSON.stringify(rows.map(r => r.id + r.updated_at));
+  lastPollHash = hash;
+  renderAll();
+}
+
+function normalizeRow(r) {
+  return {
+    id:         r.id,
+    title:      r.title || '',
+    desc:       r.description || '',
+    category:   r.category || 'Automation',
+    status:     r.status || 'backlog',
+    impact:     r.impact || 'medium',
+    effort:     r.effort || 'medium',
+    tags:       Array.isArray(r.tags) ? r.tags : [],
+    assignees:  Array.isArray(r.assignees) ? r.assignees : [],
+    milestones: Array.isArray(r.milestones) ? r.milestones : [],
+    progress:   r.progress || 0,
+    notes:      r.notes || '',
+    created:    r.created_at ? r.created_at.split('T')[0] : ''
+  };
+}
+
+// ── ADD IDEA ──────────────────────────────────────────
+async function addIdea() {
+  if (!isConnected) { toast('Connect Supabase first', 'error'); return; }
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { toast('Please enter a title', 'error'); return; }
+
+  const btn = document.getElementById('btn-add-idea');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  setSyncState('syncing');
+
+  const milestones = document.getElementById('f-milestones').value
+    .split('\n').filter(l => l.trim()).map(t => ({ text: t.trim(), done: false }));
+  const assignees = document.getElementById('f-assignees').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const tags = document.getElementById('f-tags').value
+    .split(',').map(t => t.trim()).filter(Boolean);
+
+  try {
+    const [created] = await sbFetch('ideas', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        description: document.getElementById('f-desc').value.trim(),
+        category:    document.getElementById('f-category').value,
+        status:      document.getElementById('f-status').value,
+        impact:      document.getElementById('f-impact').value,
+        effort:      document.getElementById('f-effort').value,
+        tags, assignees, milestones, progress: 0, notes: ''
+      })
+    });
+    ideas.unshift(normalizeRow(created));
+    renderAll();
+    closeModal();
+    ['f-title','f-desc','f-tags','f-assignees','f-milestones'].forEach(id => document.getElementById(id).value = '');
+    toast('Idea added ✓', 'success');
+    setSyncState('live');
+  } catch(e) {
+    toast('Save failed: ' + e.message, 'error');
+    setSyncState('error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Add Idea →';
+}
+
+// ── UPDATE FIELD ──────────────────────────────────────
+async function patchIdea(id, fields) {
+  setSyncState('syncing');
+  try {
+    await sbFetch(`ideas?id=eq.${id}`, {
+      method: 'PATCH',
+      prefer: 'return=minimal',
+      body: JSON.stringify({ ...fields, updated_at: new Date().toISOString() })
+    });
+    const idx = ideas.findIndex(i => i.id === id);
+    if (idx !== -1) Object.assign(ideas[idx], fields);
+    setSyncState('live');
+  } catch(e) {
+    toast('Sync failed: ' + e.message, 'error');
+    setSyncState('error');
+  }
+}
+
+async function updateStatus(ideaId, newStatus) {
+  const idea = ideas.find(i => i.id === ideaId);
+  if (!idea) return;
+  const updates = { status: newStatus };
+  if (newStatus === 'live') updates.progress = 100;
+  await patchIdea(ideaId, updates);
+  renderAll();
+  openDetail(ideaId);
+}
+
+async function toggleMilestone(ideaId, idx) {
+  const idea = ideas.find(i => i.id === ideaId);
+  if (!idea) return;
+  idea.milestones[idx].done = !idea.milestones[idx].done;
+  const done = idea.milestones.filter(m => m.done).length;
+  const progress = Math.round((done / idea.milestones.length) * 100);
+  idea.progress = progress;
+  await patchIdea(ideaId, { milestones: idea.milestones, progress });
+  renderAll();
+  openDetail(ideaId);
+}
+
+function scheduleNoteSave(el) {
+  clearTimeout(noteSaveTimer);
+  noteSaveTimer = setTimeout(async () => {
+    if (!currentDetailId) return;
+    await patchIdea(currentDetailId, { notes: el.value });
+    toast('Notes saved ✓', 'success');
+  }, 1200);
+}
+
+async function deleteIdea(id) {
+  if (!confirm('Delete this idea? This cannot be undone.')) return;
+  setSyncState('syncing');
+  try {
+    await sbFetch(`ideas?id=eq.${id}`, { method: 'DELETE', prefer: 'return=minimal' });
+    ideas = ideas.filter(i => i.id !== id);
+    renderAll();
+    closeDetail();
+    toast('Idea deleted', 'info');
+    setSyncState('live');
+  } catch(e) {
+    toast('Delete failed: ' + e.message, 'error');
+    setSyncState('error');
+  }
+}
+
+// ── RENDER ────────────────────────────────────────────
+function renderAll() {
+  updateStats();
+  updateCounts();
+  renderCategoryFilters();
+  renderIdeas();
+}
+
+function updateStats() {
+  document.getElementById('stat-total').textContent    = ideas.length;
+  document.getElementById('stat-building').textContent = ideas.filter(i => i.status === 'building').length;
+  document.getElementById('stat-live').textContent     = ideas.filter(i => i.status === 'live').length;
+  document.getElementById('stat-exploring').textContent= ideas.filter(i => i.status === 'exploring').length;
+  document.getElementById('stat-impact').textContent   = ideas.filter(i => i.impact === 'high').length;
+  document.getElementById('header-live-count').textContent = ideas.filter(i => i.status === 'live').length;
+}
+
+function updateCounts() {
+  ['backlog','exploring','building','testing','live','paused'].forEach(s => {
+    const el = document.getElementById('count-' + s);
+    if (el) el.textContent = ideas.filter(i => i.status === s).length;
+  });
+  document.getElementById('count-all').textContent = ideas.length;
+  ['high','medium','low'].forEach(imp => {
+    const el = document.getElementById('count-' + imp);
+    if (el) el.textContent = ideas.filter(i => i.impact === imp).length;
+  });
+}
+
+function renderCategoryFilters() {
+  const cats = [...new Set(ideas.map(i => i.category))];
+  document.getElementById('category-filters').innerHTML = cats.map(cat => `
+    <button class="filter-btn ${currentCategoryFilter === cat ? 'active' : ''}" onclick="setCategoryFilter('${cat}', this)">
+      <div class="filter-icon">${CATEGORY_ICONS[cat] || '📌'}</div>
+      ${cat}
+      <span class="count">${ideas.filter(i => i.category === cat).length}</span>
+    </button>`).join('');
+}
+
+function getFilteredIdeas() {
+  const search = document.getElementById('search-input').value.toLowerCase().trim();
+  return ideas.filter(idea => {
+    const matchStatus = currentFilter === 'all' || idea.status === currentFilter;
+    const matchImpact = !currentImpact || idea.impact === currentImpact;
+    const matchCat    = !currentCategoryFilter || idea.category === currentCategoryFilter;
+    const matchSearch = !search || idea.title.toLowerCase().includes(search) ||
+      (idea.desc||'').toLowerCase().includes(search) ||
+      (idea.tags||[]).some(t => t.toLowerCase().includes(search));
+    return matchStatus && matchImpact && matchCat && matchSearch;
+  });
+}
+
+function renderIdeas() {
+  const container = document.getElementById('ideas-container');
+  const filtered  = getFilteredIdeas();
+
+  if (!isConnected) {
+    container.innerHTML = `<div class="loading-state"><div class="spinner"></div><div style="color:var(--text-muted);font-family:'Space Mono',monospace;font-size:12px">Connect Supabase above to load ideas</div></div>`;
+    return;
+  }
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">💡</div><div class="empty-title">No ideas found</div><div class="empty-text">Try a different filter or add your first big idea.</div></div>`;
+    return;
+  }
+  if (currentView === 'grid') {
+    container.innerHTML = `<div class="ideas-grid">${filtered.map((idea, i) => renderCard(idea, i)).join('')}</div>`;
+  } else {
+    container.innerHTML = `<div class="ideas-list">${filtered.map((idea, i) => renderListItem(idea, i)).join('')}</div>`;
+  }
+}
+
+function renderCard(idea, index) {
+  const avatars = (idea.assignees||[]).slice(0,3).map((a, i) =>
+    `<div class="avatar" style="background:${AVATAR_COLORS[i%AVATAR_COLORS.length]};color:#000">${a}</div>`).join('');
+  const impactBars = ['1','2','3'].map((_, i) => {
+    const filled = (idea.impact==='high'&&i<3)||(idea.impact==='medium'&&i<2)||(idea.impact==='low'&&i<1);
+    const cls = filled ? `filled ${idea.impact==='medium'?'orange':idea.impact==='low'?'purple':''}` : '';
+    return `<span class="${cls}"></span>`;
+  }).join('');
+  return `
+    <div class="idea-card impact-${idea.impact}" onclick="openDetail(${idea.id})" style="animation-delay:${index*0.05}s">
+      <div class="card-top">
+        <div class="card-category"><span class="category-dot" style="background:${COLORS[idea.status]}"></span>${idea.category}</div>
+        <span class="status-badge ${idea.status}">${idea.status}</span>
+      </div>
+      <div class="card-title">${idea.title}</div>
+      <div class="card-desc">${idea.desc}</div>
+      ${idea.milestones&&idea.milestones.length>0?`
+        <div class="progress-row">
+          <div class="progress-track"><div class="progress-fill" style="width:${idea.progress}%;background:${COLORS[idea.status]}"></div></div>
+          <div class="progress-pct">${idea.progress}%</div>
+        </div>`:''}
+      <div class="card-tags">${(idea.tags||[]).slice(0,3).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+      <div class="card-footer">
+        <div class="assignees">${avatars}</div>
+        <div class="impact-chip"><span>${idea.impact}</span><div class="bar">${impactBars}</div></div>
+      </div>
+    </div>`;
+}
+
+function renderListItem(idea, index) {
+  return `
+    <div class="list-card" onclick="openDetail(${idea.id})" style="animation-delay:${index*0.03}s">
+      <div class="list-num">${String(index+1).padStart(2,'0')}</div>
+      <div class="list-info">
+        <div class="list-title">${idea.title}</div>
+        <div class="list-tags">${(idea.tags||[]).slice(0,3).map(t=>`<span class="tag">${t}</span>`).join('')}</div>
+      </div>
+      <span class="status-badge ${idea.status}">${idea.status}</span>
+      <div class="impact-chip"><span>${idea.impact}</span></div>
+      <div style="min-width:80px">
+        <div class="progress-row" style="margin:0">
+          <div class="progress-track"><div class="progress-fill" style="width:${idea.progress}%;background:${COLORS[idea.status]}"></div></div>
+          <div class="progress-pct">${idea.progress}%</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── DETAIL PANEL ──────────────────────────────────────
+function openDetail(id) {
+  const idea = ideas.find(i => i.id === id);
+  if (!idea) return;
+  currentDetailId = id;
+
+  document.getElementById('detail-title').textContent = idea.title;
+  document.getElementById('detail-category').innerHTML = `<span class="category-dot" style="background:${COLORS[idea.status]}"></span> ${CATEGORY_ICONS[idea.category]||''} ${idea.category}`;
+  document.getElementById('detail-status-badge').className = `status-badge ${idea.status}`;
+  document.getElementById('detail-status-badge').textContent = idea.status;
+  document.getElementById('detail-desc').textContent = idea.desc;
+  document.getElementById('detail-progress').style.width    = idea.progress + '%';
+  document.getElementById('detail-progress').style.background = COLORS[idea.status];
+  document.getElementById('detail-progress-pct').textContent  = idea.progress + '%';
+  document.getElementById('detail-notes').value = idea.notes || '';
+
+  document.getElementById('detail-impact-chip').innerHTML = `
+    <div class="bar">${['1','2','3'].map((_,i)=>{const f=(idea.impact==='high'&&i<3)||(idea.impact==='medium'&&i<2)||(idea.impact==='low'&&i<1);return`<span class="${f?'filled':''}"></span>`;}).join('')}</div> ${idea.impact} impact`;
+
+  const statuses = ['backlog','exploring','building','testing','live','paused'];
+  document.getElementById('detail-status-row').innerHTML = statuses.map(s =>
+    `<button class="status-option ${idea.status===s?'active-'+s:''}" onclick="updateStatus(${id},'${s}')">${s}</button>`).join('');
+
+  const mContainer = document.getElementById('detail-milestones');
+  if (idea.milestones && idea.milestones.length > 0) {
+    mContainer.innerHTML = idea.milestones.map((m, idx) => `
+      <div class="milestone-item">
+        <div class="milestone-check ${m.done?'done':''}" onclick="toggleMilestone(${id},${idx})">${m.done?'✓':''}</div>
+        <div class="milestone-text ${m.done?'done':''}">${m.text}</div>
+      </div>`).join('');
+    document.getElementById('milestones-section').style.display = '';
+  } else {
+    document.getElementById('milestones-section').style.display = 'none';
+  }
+
+  document.getElementById('detail-team').innerHTML = (idea.assignees||[]).map((a,i) => `
+    <div class="team-chip">
+      <div class="avatar" style="background:${AVATAR_COLORS[i%AVATAR_COLORS.length]};color:#000;width:22px;height:22px;font-size:9px">${a}</div>
+      ${a}
+    </div>`).join('');
+
+  document.getElementById('detail-tags').innerHTML = (idea.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('');
+  document.getElementById('detail-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDetail() {
+  document.getElementById('detail-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  currentDetailId = null;
+}
+
+// ── MODAL ─────────────────────────────────────────────
+function openModal()  { document.getElementById('add-modal').classList.add('open'); document.body.style.overflow='hidden'; }
+function closeModal() { document.getElementById('add-modal').classList.remove('open'); document.body.style.overflow=''; }
+
+// ── SQL MODAL ─────────────────────────────────────────
+function showSqlModal(e) { if(e) e.preventDefault(); document.getElementById('sql-modal').classList.add('open'); document.body.style.overflow='hidden'; }
+function closeSqlModal() { document.getElementById('sql-modal').classList.remove('open'); document.body.style.overflow=''; }
+function copySql() {
+  navigator.clipboard.writeText(document.getElementById('sql-block').textContent.trim())
+    .then(() => toast('SQL copied to clipboard ✓', 'success'))
+    .catch(() => toast('Select the SQL text and copy manually', 'info'));
+}
+
+// ── FILTER CONTROLS ───────────────────────────────────
+function setFilter(filter, btn) {
+  currentFilter = filter; currentImpact = null; currentCategoryFilter = null;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('view-title').textContent = filter === 'all' ? 'All Ideas' : filter.charAt(0).toUpperCase() + filter.slice(1);
+  renderIdeas();
+}
+function setImpactFilter(impact, btn) {
+  if (currentImpact === impact) { currentImpact = null; btn.classList.remove('active'); }
+  else { currentImpact = impact; document.querySelectorAll('[onclick^="setImpactFilter"]').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+  renderIdeas();
+}
+function setCategoryFilter(cat, btn) {
+  currentCategoryFilter = currentCategoryFilter === cat ? null : cat;
+  renderCategoryFilters();
+  renderIdeas();
+}
+function setView(view, btn) {
+  currentView = view;
+  document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderIdeas();
+}
+
+// ── TOAST ─────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── KEYBOARD ──────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModal(); closeDetail(); closeSqlModal(); }
+});
+
+// ── AUTO-RESTORE SESSION ──────────────────────────────
+window.addEventListener('load', () => {
+  const url = sessionStorage.getItem('sb_url');
+  const key = sessionStorage.getItem('sb_key');
+  if (url && key) {
+    document.getElementById('sb-url').value = url;
+    document.getElementById('sb-key').value = key;
+    connectSupabase();
+  }
+});
+</script>
+</body>
+</html>
